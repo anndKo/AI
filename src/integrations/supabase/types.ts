@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -76,6 +100,92 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_packages: {
+        Row: {
+          created_at: string
+          description: string | null
+          duration_days: number | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          name: string
+          package_type: string
+          price: number
+          questions_count: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          duration_days?: number | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name: string
+          package_type?: string
+          price: number
+          questions_count: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          duration_days?: number | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name?: string
+          package_type?: string
+          price?: number
+          questions_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payment_requests: {
+        Row: {
+          admin_note: string | null
+          amount: number
+          created_at: string
+          id: string
+          package_id: string | null
+          questions_count: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          amount: number
+          created_at?: string
+          id?: string
+          package_id?: string | null
+          questions_count: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          amount?: number
+          created_at?: string
+          id?: string
+          package_id?: string | null
+          questions_count?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_requests_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "payment_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -103,15 +213,97 @@ export type Database = {
         }
         Relationships: []
       }
+      user_quotas: {
+        Row: {
+          bonus_questions: number
+          created_at: string
+          daily_limit: number
+          id: string
+          last_month_reset: string
+          last_reset_date: string
+          monthly_limit: number | null
+          plan_expires_at: string | null
+          plan_type: string | null
+          questions_used_month: number
+          questions_used_today: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bonus_questions?: number
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          last_month_reset?: string
+          last_reset_date?: string
+          monthly_limit?: number | null
+          plan_expires_at?: string | null
+          plan_type?: string | null
+          questions_used_month?: number
+          questions_used_today?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bonus_questions?: number
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          last_month_reset?: string
+          last_reset_date?: string
+          monthly_limit?: number | null
+          plan_expires_at?: string | null
+          plan_type?: string | null
+          questions_used_month?: number
+          questions_used_today?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      add_bonus_questions: {
+        Args: { _amount: number; _user_id: string }
+        Returns: undefined
+      }
+      check_and_use_quota: { Args: { _user_id: string }; Returns: boolean }
+      get_remaining_quota: { Args: { _user_id: string }; Returns: Json }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      reset_daily_quotas: { Args: never; Returns: undefined }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -238,6 +430,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const

@@ -47,6 +47,24 @@ function parseContent(content: string): ContentPart[] {
   return parts.length > 0 ? parts : [{ type: "text", content }];
 }
 
+function renderHighlightedText(text: string) {
+  // Highlight **keywords** with a subtle background for readability
+  const chunks = text.split(/(\*\*[^*]+\*\*)/g);
+  return chunks.map((chunk, index) => {
+    const isBold = chunk.startsWith("**") && chunk.endsWith("**") && chunk.length >= 4;
+    if (!isBold) return chunk;
+
+    const keyword = chunk.slice(2, -2);
+    if (!keyword.trim()) return chunk;
+
+    return (
+      <span key={index} className="bg-muted text-foreground px-1 rounded">
+        {keyword}
+      </span>
+    );
+  });
+}
+
 export const MessageContent = memo(function MessageContent({ content }: MessageContentProps) {
   const parts = useMemo(() => parseContent(content), [content]);
 
@@ -54,21 +72,12 @@ export const MessageContent = memo(function MessageContent({ content }: MessageC
     <div className="space-y-2">
       {parts.map((part, index) => {
         if (part.type === "code") {
-          return (
-            <CodeBlock
-              key={index}
-              code={part.content}
-              language={part.language}
-            />
-          );
+          return <CodeBlock key={index} code={part.content} language={part.language} />;
         }
 
         return (
-          <div
-            key={index}
-            className="whitespace-pre-wrap break-words text-sm leading-relaxed"
-          >
-            {part.content}
+          <div key={index} className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            {renderHighlightedText(part.content)}
           </div>
         );
       })}

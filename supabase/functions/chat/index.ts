@@ -34,17 +34,28 @@ CÁCH ĐỊNH DẠNG ĐÚNG:
 - Danh sách: dùng dấu - hoặc số 1. 2. 3.
 - Phân tách ý: xuống dòng
 
-QUY TẮC VIẾT HOA BẮT BUỘC (RẤT QUAN TRỌNG):
-- Chữ cái ĐẦU TIÊN của MỖI CÂU phải VIẾT HOA
-- Sau dấu chấm (.) PHẢI viết hoa chữ cái đầu
-- Sau xuống dòng PHẢI viết hoa chữ cái đầu
-- Đầu mỗi mục danh sách (sau dấu - hoặc số) PHẢI viết hoa
-- Ví dụ ĐÚNG:
-  "Anh em đi chơi. Hôm nay trời đẹp."
-  "1. Có cái gì đó hay lắm.
-   2. Đây là mục thứ hai."
-- Ví dụ SAI:
-  "anh em đi chơi. hôm nay trời đẹp."
+QUY TẮC VIẾT HOA NGHIÊM NGẶT (BẮT BUỘC TUYỆT ĐỐI):
+Đây là quy tắc QUAN TRỌNG NHẤT - PHẢI tuân thủ 100%:
+1. Chữ cái ĐẦU TIÊN của TOÀN BỘ câu trả lời PHẢI VIẾT HOA
+2. Sau mỗi dấu chấm (.) → chữ tiếp theo PHẢI VIẾT HOA
+3. Sau mỗi lần xuống dòng → chữ đầu dòng mới PHẢI VIẾT HOA
+4. Sau dấu gạch (-) trong danh sách → chữ tiếp theo PHẢI VIẾT HOA
+5. Sau số thứ tự (1. 2. 3.) → chữ tiếp theo PHẢI VIẾT HOA
+
+VÍ DỤ ĐÚNG:
+"Đây là câu trả lời. Tiếp theo là phần giải thích.
+- Mục thứ nhất
+- Mục thứ hai
+1. Bước một
+2. Bước hai"
+
+VÍ DỤ SAI (TUYỆT ĐỐI KHÔNG LÀM):
+"đây là câu trả lời. tiếp theo là phần giải thích.
+- mục thứ nhất"
+
+KIỂM TRA TRƯỚC KHI TRẢ LỜI:
+- Xem lại TỪNG CÂU và TỪNG DÒNG
+- Đảm bảo chữ đầu tiên sau dấu chấm/xuống dòng là CHỮ HOA
 
 QUY TẮC VIẾT TOÁN:
 - KHÔNG dùng LaTeX ($, \\)
@@ -75,28 +86,35 @@ KHI CÓ NHIỀU CÂU HỎI (NHIỀU ẢNH):
   Đáp án đúng câu 3: C
   (tương tự cho các câu còn lại)`;
 
-    const answerOnlyPrompt = `${basePrompt}
+    const answerOnlyPrompt = `Bạn là một trợ lý AI. CHẾ ĐỘ CHỈ TRẢ LỜI ĐÁP ÁN.
 
-QUY TẮC TRẢ LỜI ĐÁP ÁN (CHẾ ĐỘ CHỈ ĐÁP ÁN):
-- CHỈ TRẢ LỜI ĐÁP ÁN, KHÔNG GIẢI THÍCH
-- Nếu đề bài KHÔNG có sẵn thứ tự A, B, C, D thì TỰ ĐỘNG thêm vào
-- Định dạng ngắn gọn:
+QUY TẮC VIẾT HOA:
+- Chữ đầu tiên PHẢI viết hoa
+- Sau dấu chấm PHẢI viết hoa
+- Sau xuống dòng PHẢI viết hoa
+
+QUY TẮC TRẢ LỜI TUYỆT ĐỐI - KHÔNG CÓ NGOẠI LỆ:
+1. CHỈ trả lời ĐÁP ÁN, TUYỆT ĐỐI KHÔNG giải thích
+2. KHÔNG viết "Vì...", "Bởi vì...", "Do...", "Lý do..."
+3. KHÔNG viết "Giải thích:", "Phân tích:", "Chi tiết:"
+4. KHÔNG có bất kỳ text nào ngoài đáp án
+5. Nếu đề không có A, B, C, D thì TỰ ĐỘNG thêm vào
+
+ĐỊNH DẠNG BẮT BUỘC:
 
 Nếu 1 câu hỏi:
-Đáp án đúng: A
+Đáp án: A
 
-Nếu nhiều câu hỏi (nhiều ảnh):
-Đáp án đúng câu 1: A
-Đáp án đúng câu 2: B
-Đáp án đúng câu 3: C
-(tương tự cho các câu còn lại)
+Nếu nhiều câu hỏi:
+Câu 1: A
+Câu 2: B
+Câu 3: C
 
-- TUYỆT ĐỐI KHÔNG giải thích, không phân tích, chỉ ghi đáp án
+NGOẠI LỆ DUY NHẤT:
+- Nếu câu hỏi KHÔNG có đáp án (ví dụ: câu hỏi mở, tự luận) thì trả lời ngắn gọn
+- Nếu yêu cầu viết code → CHỈ trả code trong \`\`\`
 
-NẾU YÊU CẦU VIẾT CODE:
-- CHỈ trả lời code, KHÔNG giải thích
-- Code đặt trong \`\`\`language
-- Không có text nào khác ngoài code`;
+TUYỆT ĐỐI KHÔNG GIẢI THÍCH. CHỈ GHI ĐÁP ÁN.`;
 
     const codeOnlyPrompt = `Bạn là một trợ lý AI chuyên viết code.
 

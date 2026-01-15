@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, ImagePlus, X, Loader2, ChevronDown } from "lucide-react";
+import { Send, ImagePlus, X, Loader2, ChevronDown, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -18,9 +18,11 @@ export type ResponseMode = "normal" | "answer_only" | "code_only";
 interface ChatInputProps {
   onSend: (message: string, images?: string[], mode?: ResponseMode) => void;
   isLoading: boolean;
+  onStop?: () => void;
+  disabled?: boolean;
 }
 
-export function ChatInput({ onSend, isLoading }: ChatInputProps) {
+export function ChatInput({ onSend, isLoading, onStop, disabled }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -205,7 +207,6 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
           placeholder="Nhập tin nhắn hoặc dán ảnh (Ctrl+V)..."
           className="min-h-[44px] max-h-32 resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 p-0 text-sm will-change-auto"
           rows={1}
-          disabled={isLoading}
           autoComplete="off"
           spellCheck={false}
         />
@@ -258,18 +259,26 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button
-          onClick={handleSubmit}
-          disabled={isLoading || (!input.trim() && images.length === 0)}
-          size="icon"
-          className="h-9 w-9 rounded-xl flex-shrink-0"
-        >
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
+        {isLoading && onStop ? (
+          <Button
+            onClick={onStop}
+            size="icon"
+            variant="destructive"
+            className="h-9 w-9 rounded-xl flex-shrink-0"
+            title="Dừng trả lời"
+          >
+            <Square className="w-4 h-4" />
+          </Button>
+        ) : (
+          <Button
+            onClick={handleSubmit}
+            disabled={disabled || (!input.trim() && images.length === 0)}
+            size="icon"
+            className="h-9 w-9 rounded-xl flex-shrink-0"
+          >
             <Send className="w-4 h-4" />
-          )}
-        </Button>
+          </Button>
+        )}
       </div>
 
       {isDragOver && (

@@ -1,23 +1,52 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { TypingIndicator } from "./TypingIndicator";
 import { ChatSidebar } from "./ChatSidebar";
+import { QuotaExhausted } from "./QuotaExhausted";
+import { LoginRequiredDialog } from "./LoginRequiredDialog";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
-import { Bot, Sparkles, Trash2, RefreshCw } from "lucide-react";
+import { useQuota } from "@/hooks/useQuota";
+import { Bot, Sparkles, Trash2, RefreshCw, Shield, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export function ChatContainer() {
-  const { messages, isLoading, sendMessage, clearChat, currentSessionId, selectSession } = useChat();
-  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { messages, isLoading, sendMessage, clearChat, currentSessionId, selectSession, stopGeneration } = useChat();
+  const { user, isAuthenticated } = useAuth();
+  const { quota, isAdmin, canAsk, useOneQuestion, fetchQuota } = useQuota();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
 
+  // Smart auto-scroll
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+    if (!userScrolledUp) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isLoading, userScrolledUp]);
+
+  // Detect user scroll
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    setUserScrolledUp(!isNearBottom);
+  }, []);
+
+  // Reset scroll state when not loading
+  useEffect(() => {
+    if (!isLoading) {
+      setUserScrolledUp(false);
+    }
+  }, [isLoading]);
 
   const showWelcome = messages.length === 0;
 
@@ -28,6 +57,34 @@ export function ChatContainer() {
   const handleReload = useCallback(() => {
     window.location.reload();
   }, []);
+
+  const handleClearChat = useCallback(async () => {
+    // Delete from database if authenticated and has session
+    if (isAuthenticated && currentSessionId) {
+      try {
+        await supabase.from("chat_messages").delete().eq("session_id", currentSessionId);
+        await supabase.from("chat_sessions").delete().eq("id", currentSessionId);
+      } catch (error) {
+        console.error("Error deleting chat:", error);
+      }
+    }
+    clearChat();
+    toast.success("Đã xóa cuộc trò chuyện");
+  }, [isAuthenticated, currentSessionId, clearChat]);
+
+  const handleSendMessage = useCallback(async (content: string, images?: string[], mode?: any) => {
+    if (!isAuthenticated) {
+      setLoginRequiredOpen(true);
+      return;
+    }
+
+    const canSend = await useOneQuestion();
+    if (!canSend) {
+      return; // Will show quota exhausted
+    }
+
+    sendMessage(content, images, mode);
+  }, [isAuthenticated, useOneQuestion, sendMessage]);
 
   return (
     <div className="flex h-screen bg-chat-bg">
@@ -52,11 +109,38 @@ export function ChatContainer() {
               <h1 className="font-semibold text-foreground">AI Chat</h1>
               <p className="text-xs text-muted-foreground hidden sm:block">
                 Trả lời siêu nhanh • Phân tích ảnh
+                {isAuthenticated && quota && ` • Còn ${quota.remaining + quota.bonus} lượt`}
                 {!isAuthenticated && " • Đăng nhập để lưu lịch sử"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAuthenticated && quota ? (
+              <div
+                className="flex items-center rounded-full bg-muted px-3 py-1 text-xs text-foreground"
+                title="Số lượt hỏi còn lại"
+              >
+                <span className="text-muted-foreground mr-1">Lượt:</span>
+                <span className="font-medium">{quota.remaining + quota.bonus}</span>
+              </div>
+            ) : (
+              <div className="flex items-center rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                Chưa đăng nhập
+              </div>
+            )}
+
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/admin")}
+                className="text-muted-foreground hover:text-primary"
+                title="Trang Admin"
+              >
+                <Shield className="w-4 h-4" />
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
@@ -71,7 +155,7 @@ export function ChatContainer() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={clearChat}
+                onClick={handleClearChat}
                 className="text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="w-4 h-4 sm:mr-1" />
@@ -82,7 +166,11 @@ export function ChatContainer() {
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6">
+        <div 
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6"
+        >
           <div className="max-w-3xl mx-auto space-y-4">
             {showWelcome && (
               <div className="flex flex-col items-center justify-center py-16 animate-slide-up">
@@ -126,15 +214,32 @@ export function ChatContainer() {
           </div>
         </div>
 
+        {/* Quota exhausted message */}
+        {isAuthenticated && !canAsk() && <QuotaExhausted />}
+
         {/* Input */}
         <div className="px-4 pb-4 pt-2">
           <div className="max-w-3xl mx-auto">
-            <ChatInput onSend={sendMessage} isLoading={isLoading} />
+            <ChatInput
+              onSend={handleSendMessage}
+              isLoading={isLoading}
+              onStop={stopGeneration}
+              disabled={isAuthenticated && !canAsk()}
+            />
             <p className="text-xs text-muted-foreground text-center mt-2">
               Enter để gửi • Shift+Enter xuống dòng • Ctrl+V dán ảnh • Tối đa 12 ảnh
             </p>
           </div>
         </div>
+
+        <LoginRequiredDialog
+          open={loginRequiredOpen}
+          onClose={() => setLoginRequiredOpen(false)}
+          onLogin={() => {
+            setLoginRequiredOpen(false);
+            navigate("/auth");
+          }}
+        />
       </div>
     </div>
   );

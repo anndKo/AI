@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
@@ -19,6 +19,7 @@ export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const loadSession = useCallback(async (sessionId: string) => {
     if (!isAuthenticated) return;
@@ -162,6 +163,8 @@ export function useChat() {
     };
 
     try {
+      abortControllerRef.current = new AbortController();
+      
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -169,6 +172,7 @@ export function useChat() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({ messages: apiMessages, mode }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!resp.ok) {
@@ -255,6 +259,14 @@ export function useChat() {
     setCurrentSessionId(null);
   }, []);
 
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
+  }, []);
+
   const selectSession = useCallback((sessionId: string | null) => {
     if (sessionId) {
       loadSession(sessionId);
@@ -270,6 +282,7 @@ export function useChat() {
     clearChat, 
     currentSessionId, 
     selectSession,
-    refreshSessions: loadSession 
+    refreshSessions: loadSession,
+    stopGeneration,
   };
 }
