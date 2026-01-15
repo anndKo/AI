@@ -112,6 +112,13 @@ export default function Admin() {
       fetchPackages();
       fetchRequests();
       fetchUsers();
+
+      // Auto refresh payment requests every 5 seconds when on requests tab
+      const interval = setInterval(() => {
+        fetchRequests();
+      }, 5000);
+
+      return () => clearInterval(interval);
     }
   }, [isAdmin]);
 

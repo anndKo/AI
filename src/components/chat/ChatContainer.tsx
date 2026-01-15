@@ -215,7 +215,13 @@ export function ChatContainer() {
         </div>
 
         {/* Quota exhausted message */}
-        {isAuthenticated && !canAsk() && <QuotaExhausted />}
+        {isAuthenticated && !canAsk() && (
+          <div className="px-4 py-4 border-t">
+            <div className="max-w-3xl mx-auto">
+              <QuotaExhausted />
+            </div>
+          </div>
+        )}
 
         {/* Input */}
         <div className="px-4 pb-4 pt-2">

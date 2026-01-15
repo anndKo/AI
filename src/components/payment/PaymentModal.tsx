@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";import { QrFullscreenViewer } from "@/components/chat/QrFullscreenViewer";import { toast } from "sonner";
-import { Check, X, CreditCard, Package } from "lucide-react";
+import { Check, X, CreditCard, Package, Upload, Loader2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
 
 interface PaymentPackage {
   id: string;
@@ -39,11 +40,15 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
   const [packages, setPackages] = useState<PaymentPackage[]>([]);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<PaymentPackage | null>(null);
-  const [step, setStep] = useState<"packages" | "confirm">("packages");
+  const [step, setStep] = useState<"packages" | "confirm" | "bill">("packages");
   const [loading, setLoading] = useState(false);
   const [showQrFullscreen, setShowQrFullscreen] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [billImage, setBillImage] = useState<File | null>(null);
+  const [billPreview, setBillPreview] = useState<string | null>(null);
+  const [uploadingBill, setUploadingBill] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -54,6 +59,8 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
       // Reset state when closing
       setStep("packages");
       setSelectedPackage(null);
+      setBillImage(null);
+      setBillPreview(null);
     }
   }, [open]);
 
@@ -106,19 +113,110 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
 
   const handleSelectPackage = (pkg: PaymentPackage) => {
     setSelectedPackage(pkg);
-    setStep("confirm");
+    setStep("bill");
+  };
+
+  const handleBillImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Vui lòng chọn file ảnh");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ảnh không được vượt quá 5MB");
+      return;
+    }
+
+    setBillImage(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setBillPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadBillImage = async (): Promise<string | null> => {
+    if (!billImage || !user) return null;
+
+    try {
+      setUploadingBill(true);
+      const fileExt = billImage.name.split(".").pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `bills/${fileName}`;
+
+      // Try to upload to payment_bills bucket, fallback to bills bucket
+      let uploadError: any = null;
+      let uploadedPath = "";
+
+      // Try primary bucket first
+      const { error: err1 } = await supabase.storage
+        .from("payment_bills")
+        .upload(filePath, billImage, { upsert: false });
+
+      if (err1) {
+        // If payment_bills doesn't exist, try bills bucket
+        const { error: err2 } = await supabase.storage
+          .from("bills")
+          .upload(filePath, billImage, { upsert: false });
+
+        if (err2) {
+          uploadError = err2;
+        } else {
+          uploadedPath = "bills";
+        }
+      } else {
+        uploadedPath = "payment_bills";
+      }
+
+      if (uploadError && !uploadedPath) {
+        throw uploadError;
+      }
+
+      const bucketName = uploadedPath || "payment_bills";
+      const { data } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error("Error uploading bill:", error);
+      toast.error("Lỗi upload ảnh bill. Vui lòng thử lại.");
+      return null;
+    } finally {
+      setUploadingBill(false);
+    }
   };
 
   const handleConfirmPayment = async () => {
     if (!user || !selectedPackage) return;
 
+    // Validate bill image is selected
+    if (!billImage) {
+      toast.error("Vui lòng chọn ảnh bill/chứng chỉ chuyển khoản");
+      return;
+    }
+
     setLoading(true);
     try {
+      // Upload bill image first
+      const billUrl = await uploadBillImage();
+      if (!billUrl) {
+        toast.error("Lỗi upload ảnh bill");
+        return;
+      }
+
+      // Create payment request with bill image
       const { error } = await supabase.from("payment_requests").insert({
         user_id: user.id,
         package_id: selectedPackage.id,
         amount: selectedPackage.price,
         questions_count: selectedPackage.questions_count,
+        bill_image: billUrl,
         status: "pending",
       });
 
@@ -128,6 +226,8 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
       onClose();
       setStep("packages");
       setSelectedPackage(null);
+      setBillImage(null);
+      setBillPreview(null);
     } catch (error) {
       console.error("Error creating payment request:", error);
       toast.error("Có lỗi xảy ra, vui lòng thử lại.");
@@ -139,6 +239,8 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
   const handleCancel = () => {
     setStep("packages");
     setSelectedPackage(null);
+    setBillImage(null);
+    setBillPreview(null);
   };
 
   const formatPrice = (price: number) => {
@@ -160,11 +262,13 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
-            {step === "packages" ? "Mua thêm lượt hỏi" : "Xác nhận thanh toán"}
+            {step === "packages" ? "Mua thêm lượt hỏi" : step === "bill" ? "Tải ảnh bill" : "Xác nhận thanh toán"}
           </DialogTitle>
           <DialogDescription>
             {step === "packages"
               ? "Chọn gói phù hợp với nhu cầu của bạn"
+              : step === "bill"
+              ? "Tải ảnh bill/chứng chỉ chuyển khoản"
               : "Chuyển khoản và xác nhận để được duyệt"}
           </DialogDescription>
         </DialogHeader>
@@ -230,6 +334,88 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
           </div>
         )}
 
+        {step === "bill" && selectedPackage && (
+          <div className="space-y-4 mt-4">
+            <div className="p-4 bg-muted rounded-lg">
+              <h3 className="font-semibold mb-2">Gói đã chọn: {selectedPackage.name}</h3>
+              <p className="text-sm">Số câu hỏi: {selectedPackage.questions_count}</p>
+              <p className="text-sm font-bold text-primary">
+                Số tiền: {formatPrice(selectedPackage.price)}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Label htmlFor="bill-image" className="text-base font-semibold">
+                Tải ảnh bill/Chứng chỉ chuyển khoản
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Tải ảnh screen shot hoặc ảnh bill chuyển khoản để xác nhận
+              </p>
+
+              <input
+                ref={fileInputRef}
+                id="bill-image"
+                type="file"
+                accept="image/*"
+                onChange={handleBillImageSelect}
+                className="hidden"
+              />
+
+              {!billPreview ? (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full p-8 border-2 border-dashed border-muted rounded-lg hover:border-primary/50 hover:bg-primary/5 transition-all"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <p className="font-semibold">Bấm để chọn ảnh</p>
+                    <p className="text-xs text-muted-foreground">
+                      Hỗ trợ JPG, PNG. Tối đa 5MB
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="relative rounded-lg overflow-hidden border">
+                    <img
+                      src={billPreview}
+                      alt="Bill preview"
+                      className="w-full h-48 object-contain bg-muted"
+                    />
+                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full px-4 py-2 border rounded-lg hover:bg-muted transition-colors text-sm font-medium"
+                  >
+                    Chọn ảnh khác
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handleCancel}
+                disabled={loading || uploadingBill}
+              >
+                <X className="w-4 h-4 mr-1" />
+                Huỷ
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  setStep("confirm");
+                }}
+                disabled={!billPreview || loading || uploadingBill}
+              >
+                Tiếp tục
+              </Button>
+            </div>
+          </div>
+        )}
+
         {step === "confirm" && selectedPackage && (
           <div className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-lg">
@@ -239,6 +425,18 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
                 Số tiền: {formatPrice(selectedPackage.price)}
               </p>
             </div>
+
+            {/* Bill Preview */}
+            {billPreview && (
+              <div className="border rounded-lg p-3 bg-muted">
+                <p className="text-sm font-semibold mb-2">Ảnh bill đã tải:</p>
+                <img
+                  src={billPreview}
+                  alt="Bill"
+                  className="w-full h-32 object-contain rounded"
+                />
+              </div>
+            )}
 
             {paymentInfo && (paymentInfo.bank_name || paymentInfo.qr_image) && (
               <div className="p-4 border rounded-lg">
@@ -268,19 +466,28 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={handleCancel}
-                disabled={loading}
+                onClick={() => setStep("bill")}
+                disabled={loading || uploadingBill}
               >
                 <X className="w-4 h-4 mr-1" />
-                Huỷ
+                Quay lại
               </Button>
               <Button
                 className="flex-1"
                 onClick={handleConfirmPayment}
-                disabled={loading}
+                disabled={loading || uploadingBill}
               >
-                <Check className="w-4 h-4 mr-1" />
-                {loading ? "Đang gửi..." : "Xác nhận chuyển khoản"}
+                {uploadingBill || loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    {uploadingBill ? "Đang tải lên..." : "Đang gửi..."}
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-1" />
+                    Gửi yêu cầu
+                  </>
+                )}
               </Button>
             </div>
           </div>
