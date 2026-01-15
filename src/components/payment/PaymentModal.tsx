@@ -40,7 +40,7 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
   const [packages, setPackages] = useState<PaymentPackage[]>([]);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<PaymentPackage | null>(null);
-  const [step, setStep] = useState<"packages" | "confirm" | "bill">("packages");
+  const [step, setStep] = useState<"packages" | "transfer_info" | "bill" | "confirm">("packages");
   const [loading, setLoading] = useState(false);
   const [showQrFullscreen, setShowQrFullscreen] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
@@ -98,21 +98,32 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
         .single();
 
       if (err) {
-        console.warn("No payment info found");
+        console.warn("No payment info found:", err);
+        setPaymentInfo(null);
         return;
       }
 
-      if (data) {
-        setPaymentInfo(data.value as unknown as PaymentInfo);
+      if (data && data.value) {
+        try {
+          // Đảm bảo data.value là object
+          const paymentData = typeof data.value === 'string' 
+            ? JSON.parse(data.value) 
+            : data.value;
+          setPaymentInfo(paymentData as PaymentInfo);
+        } catch (parseErr) {
+          console.error("Error parsing payment info:", parseErr);
+          setPaymentInfo(null);
+        }
       }
     } catch (err) {
       console.error("Error fetching payment info:", err);
+      setPaymentInfo(null);
     }
   };
 
   const handleSelectPackage = (pkg: PaymentPackage) => {
     setSelectedPackage(pkg);
-    setStep("bill");
+    setStep("transfer_info");
   };
 
   const handleBillImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,40 +150,74 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
     reader.readAsDataURL(file);
   };
 
-  const uploadBillImage = async (): Promise<string | null> => {
-    if (!billImage || !billPreview) return billPreview;
+  const uploadBillImageToStorage = async (file: File): Promise<string | null> => {
+    if (!user) return null;
 
-    // Sử dụng data URL trực tiếp để tránh vấn đề storage bucket
-    // Bill image sẽ được lưu dưới dạng base64 trong database
-    return billPreview;
+    try {
+      const fileExt = file.name.split(".").pop() || "jpg";
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `bills/${fileName}`;
+
+      // Create FormData for file upload
+      const { data, error } = await supabase.storage
+        .from("bills")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false
+        });
+
+      if (error) {
+        console.error("Storage upload error:", error);
+        throw new Error(`Upload failed: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: publicData } = supabase.storage
+        .from("bills")
+        .getPublicUrl(filePath);
+
+      return publicData.publicUrl;
+    } catch (error) {
+      console.error("Error uploading bill image:", error);
+      throw error;
+    }
   };
 
   const handleConfirmPayment = async () => {
-    if (!user || !selectedPackage) return;
-
-    // Validate bill image is selected
-    if (!billImage || !billPreview) {
+    if (!user || !selectedPackage || !billImage) {
       toast.error("Vui lòng chọn ảnh bill/chứng chỉ chuyển khoản");
       return;
     }
 
     setLoading(true);
     try {
-      // Create payment request with bill image (as base64 data URL)
+      // Upload bill image to storage first
+      console.log("Uploading bill image...");
+      const billUrl = await uploadBillImageToStorage(billImage);
+      
+      if (!billUrl) {
+        throw new Error("Không thể upload ảnh bill");
+      }
+
+      console.log("Bill URL:", billUrl);
+
+      // Create payment request with bill image URL
+      console.log("Creating payment request...");
       const { error } = await supabase.from("payment_requests").insert({
         user_id: user.id,
         package_id: selectedPackage.id,
         amount: selectedPackage.price,
         questions_count: selectedPackage.questions_count,
-        bill_image: billPreview, // Store as base64 data URL
+        bill_image: billUrl, // Store URL instead of base64
         status: "pending",
       });
 
       if (error) {
-        console.error("Error creating payment request:", error);
+        console.error("Payment request error:", error);
         throw error;
       }
 
+      console.log("Payment request created successfully");
       toast.success("Đã gửi yêu cầu thanh toán! Vui lòng đợi admin duyệt.");
       
       // Reset state
@@ -182,9 +227,9 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
       setBillImage(null);
       setBillPreview(null);
     } catch (error) {
-      console.error("Error creating payment request:", error);
-      const errorMessage = (error as any)?.message || "Có lỗi xảy ra, vui lòng thử lại.";
-      toast.error(errorMessage);
+      console.error("Error in payment process:", error);
+      const errorMsg = (error as any)?.message || "Có lỗi xảy ra, vui lòng thử lại.";
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -216,11 +261,13 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
-            {step === "packages" ? "Mua thêm lượt hỏi" : step === "bill" ? "Tải ảnh bill" : "Xác nhận thanh toán"}
+            {step === "packages" ? "Mua thêm lượt hỏi" : step === "transfer_info" ? "Thông tin chuyển khoản" : step === "bill" ? "Tải ảnh bill" : "Xác nhận thanh toán"}
           </DialogTitle>
           <DialogDescription>
             {step === "packages"
               ? "Chọn gói phù hợp với nhu cầu của bạn"
+              : step === "transfer_info"
+              ? "Vui lòng xác nhận thông tin chuyển khoản"
               : step === "bill"
               ? "Tải ảnh bill/chứng chỉ chuyển khoản"
               : "Chuyển khoản và xác nhận để được duyệt"}
@@ -288,6 +335,89 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
           </div>
         )}
 
+        {step === "transfer_info" && selectedPackage && (
+          <div className="space-y-4 mt-4">
+            <div className="p-4 bg-muted rounded-lg border">
+              <h3 className="font-semibold mb-2">Gói đã chọn: {selectedPackage.name}</h3>
+              <p className="text-sm">Số câu hỏi: {selectedPackage.questions_count}</p>
+              <p className="text-sm font-bold text-primary">
+                Số tiền: {formatPrice(selectedPackage.price)}
+              </p>
+            </div>
+
+            {/* Transfer Information */}
+            {paymentInfo && (paymentInfo.bank_name || paymentInfo.qr_image) ? (
+              <div className="p-4 border-2 border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+                <h4 className="font-bold mb-4 text-lg text-blue-900 dark:text-blue-100">
+                  💳 THÔNG TIN CHUYỂN KHOẢN
+                </h4>
+                <div className="space-y-3 mb-4">
+                  {paymentInfo.bank_name && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Ngân hàng:</span>
+                      <span className="text-sm font-bold text-blue-900 dark:text-blue-100">{paymentInfo.bank_name}</span>
+                    </div>
+                  )}
+                  {paymentInfo.account_number && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Số tài khoản:</span>
+                      <span className="text-sm font-bold text-blue-900 dark:text-blue-100 font-mono">{paymentInfo.account_number}</span>
+                    </div>
+                  )}
+                  {paymentInfo.account_name && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Chủ tài khoản:</span>
+                      <span className="text-sm font-bold text-blue-900 dark:text-blue-100">{paymentInfo.account_name}</span>
+                    </div>
+                  )}
+                </div>
+
+                {paymentInfo.qr_image && (
+                  <div className="mt-4 p-3 bg-white dark:bg-slate-900 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <p className="text-xs text-center text-blue-700 dark:text-blue-300 mb-2 font-medium">Mã QR chuyển khoản:</p>
+                    <img
+                      src={paymentInfo.qr_image}
+                      alt="QR Code"
+                      className="w-48 h-48 mx-auto border-2 border-blue-300 dark:border-blue-700 rounded cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => setShowQrFullscreen(true)}
+                      title="Bấm để xem toàn màn hình"
+                    />
+                  </div>
+                )}
+
+                <div className="mt-4 p-3 bg-amber-100 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg">
+                  <p className="text-xs text-amber-900 dark:text-amber-200">
+                    ⚠️ <span className="font-semibold">Lưu ý:</span> Vui lòng chuyển khoản chính xác số tiền <span className="font-bold">{formatPrice(selectedPackage.price)}</span> để dễ dàng xác minh
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 border border-destructive/20 rounded-lg bg-destructive/10">
+                <p className="text-sm text-destructive">⚠️ Không tìm thấy thông tin chuyển khoản. Vui lòng liên hệ admin.</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handleCancel}
+                disabled={loading}
+              >
+                <X className="w-4 h-4 mr-1" />
+                Huỷ
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => setStep("bill")}
+                disabled={!paymentInfo || loading}
+              >
+                Tiếp tục tải bill
+              </Button>
+            </div>
+          </div>
+        )}
+
         {step === "bill" && selectedPackage && (
           <div className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-lg">
@@ -297,33 +427,6 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
                 Số tiền: {formatPrice(selectedPackage.price)}
               </p>
             </div>
-
-            {/* Payment Info - Show before bill upload */}
-            {paymentInfo && (paymentInfo.bank_name || paymentInfo.qr_image) && (
-              <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/30">
-                <h4 className="font-semibold mb-3 text-blue-900 dark:text-blue-100">📋 Thông tin chuyển khoản:</h4>
-                {paymentInfo.bank_name && (
-                  <p className="text-sm text-blue-800 dark:text-blue-200">Ngân hàng: <span className="font-semibold">{paymentInfo.bank_name}</span></p>
-                )}
-                {paymentInfo.account_number && (
-                  <p className="text-sm text-blue-800 dark:text-blue-200">Số TK: <span className="font-semibold">{paymentInfo.account_number}</span></p>
-                )}
-                {paymentInfo.account_name && (
-                  <p className="text-sm text-blue-800 dark:text-blue-200">Chủ TK: <span className="font-semibold">{paymentInfo.account_name}</span></p>
-                )}
-                {paymentInfo.qr_image && (
-                  <div className="mt-3">
-                    <img
-                      src={paymentInfo.qr_image}
-                      alt="QR Code"
-                      className="w-40 h-40 mx-auto border rounded cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => setShowQrFullscreen(true)}
-                      title="Bấm để xem toàn màn hình"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="space-y-3">
               <Label htmlFor="bill-image" className="text-base font-semibold">
@@ -408,6 +511,24 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
               </p>
             </div>
 
+            {/* Transfer Info Summary */}
+            {paymentInfo && (paymentInfo.bank_name || paymentInfo.qr_image) && (
+              <div className="p-3 border-2 border-blue-300 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+                <h4 className="font-semibold mb-2 text-blue-900 dark:text-blue-100">💳 Đã xác nhận chuyển khoản tới:</h4>
+                <div className="space-y-1">
+                  {paymentInfo.bank_name && (
+                    <p className="text-xs text-blue-800 dark:text-blue-200">Ngân hàng: <span className="font-semibold">{paymentInfo.bank_name}</span></p>
+                  )}
+                  {paymentInfo.account_number && (
+                    <p className="text-xs text-blue-800 dark:text-blue-200">Số TK: <span className="font-semibold font-mono">{paymentInfo.account_number}</span></p>
+                  )}
+                  {paymentInfo.account_name && (
+                    <p className="text-xs text-blue-800 dark:text-blue-200">Chủ TK: <span className="font-semibold">{paymentInfo.account_name}</span></p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Bill Preview Summary */}
             {billPreview && (
               <div className="border rounded-lg p-3 bg-muted">
@@ -422,7 +543,7 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
 
             <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
               <p className="text-sm text-green-800 dark:text-green-200">
-                ✓ Tất cả thông tin đã sẵn sàng. Bấm "Gửi yêu cầu" để hoàn tất.
+                ✓ Tất cả thông tin đã sẵn sàng. Bấm "Gửi yêu cầu" để hoàn tất yêu cầu.
               </p>
             </div>
 

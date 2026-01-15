@@ -2,7 +2,32 @@
 
 ## 1. Tính năng Bill Review (Duyệt Bill)
 
-### 1.1 Yêu cầu thanh toán từ người dùng
+### 1.1 Quy trình thanh toán mới - Thông tin chuyển khoản trước
+**File**: `src/components/payment/PaymentModal.tsx`
+
+**Luồng mới (cải tiến)**:
+1. ✅ Chọn gói thanh toán
+2. ✅ **XEM THÔNG TIN CHUYỂN KHOẢN** (bước mới - step: "transfer_info")
+   - Hiển thị rõ: Ngân hàng, Số tài khoản, Chủ tài khoản
+   - Hiển thị mã QR code (có thể xem toàn màn hình)
+   - Cảnh báo: Chuyển đúng số tiền để dễ xác minh
+   - Nút "Tiếp tục tải bill" để sang bước tiếp theo
+3. ✅ Tải ảnh bill/chứng chỉ chuyển khoản
+   - Kiểm tra loại file (chỉ hình ảnh)
+   - Giới hạn kích thước (tối đa 5MB)
+   - Xem trước ảnh trước khi xác nhận
+4. ✅ Xác nhận toàn bộ thông tin
+   - Xem lại: Gói, thông tin chuyển khoản, ảnh bill
+   - Nút "Gửi yêu cầu" để gửi cho admin duyệt
+5. ✅ Admin duyệt yêu cầu
+
+**Lợi ích**:
+- Người dùng xác nhận thông tin chuyển khoản rõ ràng trước khi thực hiện
+- Giảm nhầm lẫn với tài khoản ngân hàng sai
+- Cảnh báo về số tiền chính xác cần chuyển
+- Dễ dàng hỗ trợ/giải thích cho người dùng nếu cần
+
+### 1.2 Yêu cầu thanh toán từ người dùng
 - Người dùng tải ảnh bill/chứng chỉ chuyển khoản khi gửi yêu cầu thanh toán
 - Ảnh được lưu trữ trong Supabase Storage (`admin-uploads/bills/`)
 
@@ -14,7 +39,7 @@
   - Xóa ảnh nếu muốn thay đổi
   - Disable button "Xác nhận chuyển khoản" nếu chưa tải ảnh
 
-### 1.2 Luồng duyệt bill trong Admin
+### 1.3 Luồng duyệt bill trong Admin
 **File**: `src/components/admin/BillReviewModal.tsx` (tệp mới)
 - Component modal để duyệt/từ chối yêu cầu thanh toán
 - Chức năng:
@@ -28,7 +53,7 @@
     - Nhập lý do từ chối
     - Lưu rejection_reason vào database
 
-### 1.3 Giao diện Admin - Tab "Yêu cầu"
+### 1.4 Giao diện Admin - Tab "Yêu cầu"
 **File**: `src/pages/Admin.tsx`
 - Thêm cột "Bill" để hiển thị thumbnail ảnh bill
 - Click vào thumbnail hoặc nút "Duyệt" để mở BillReviewModal
@@ -103,17 +128,37 @@ ADD COLUMN rejection_reason TEXT;
 
 ## 6. Luồng hoàn chỉnh
 
-### Luồng Thanh toán:
-1. User tạo yêu cầu thanh toán
-2. User chọn gói → Xem QR (fullscreen + download) → Tải ảnh bill → Gửi
-3. Admin duyệt:
-   - Xem ảnh bill (fullscreen)
+### Luồng Thanh toán (Cải tiến):
+1. **User tạo yêu cầu thanh toán**
+   - Bấm nút "Mua thêm lượt hỏi"
+   
+2. **Chọn gói thanh toán**
+   - Xem danh sách các gói
+   - Click chọn gói muốn mua
+
+3. **XEM THÔNG TIN CHUYỂN KHOẢN** (BẬC MỚI - TRỊ)
+   - Hiển thị đầy đủ: Ngân hàng, Số tài khoản, Chủ tài khoản
+   - Hiển thị mã QR code
+   - Cảnh báo: Chuyển đúng số tiền
+   - Nút "Tiếp tục tải bill"
+
+4. **Tải ảnh bill/chứng chỉ chuyển khoản**
+   - Upload ảnh chứng chỉ chuyển khoản
+   - Xem trước ảnh
+
+5. **Xác nhận toàn bộ thông tin**
+   - Xem lại: Gói, thông tin chuyển khoản, ảnh bill
+   - Nút "Gửi yêu cầu"
+
+6. **Admin duyệt yêu cầu**
+   - Xem ảnh bill (fullscreen + download)
    - Nhập số ngày + số câu hỏi
-   - Xác nhận → Tự động:
+   - Xác nhận duyệt → Tự động:
      - Cộng bonus_questions
      - Set plan_expires_at
      - Cập nhật status = "approved"
-4. User nhận được câu hỏi bonus + gia hạn plan
+
+7. **User nhận được câu hỏi bonus + gia hạn plan**
 
 ### Luồng Cài đặt Admin:
 1. Admin đặt giới hạn câu hỏi/ngày mặc định
