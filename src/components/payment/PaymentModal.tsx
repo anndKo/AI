@@ -41,6 +41,7 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
   const [selectedPackage, setSelectedPackage] = useState<PaymentPackage | null>(null);
   const [step, setStep] = useState<"packages" | "confirm">("packages");
   const [loading, setLoading] = useState(false);
+  const [showQrFullscreen, setShowQrFullscreen] = useState(false);
 
   useEffect(() => {
     if (open) {
