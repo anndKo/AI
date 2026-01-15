@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { CreditCard, AlertCircle } from "lucide-react";
 import { PaymentModal } from "@/components/payment/PaymentModal";
 
 export function QuotaExhausted() {
   const [showPayment, setShowPayment] = useState(false);
+
+  const handleOpenPayment = useCallback(() => {
+    setShowPayment(true);
+  }, []);
+
+  const handleClosePayment = useCallback(() => {
+    setShowPayment(false);
+  }, []);
 
   return (
     <>
@@ -16,13 +24,13 @@ export function QuotaExhausted() {
         <p className="text-sm text-muted-foreground text-center mb-4">
           Mua thêm lượt hỏi để tiếp tục sử dụng
         </p>
-        <Button onClick={() => setShowPayment(true)} className="gap-2">
+        <Button onClick={handleOpenPayment} className="gap-2">
           <CreditCard className="w-4 h-4" />
           Thanh toán ngay
         </Button>
       </div>
 
-      <PaymentModal open={showPayment} onClose={() => setShowPayment(false)} />
+      {showPayment && <PaymentModal open={showPayment} onClose={handleClosePayment} />}
     </>
   );
 }

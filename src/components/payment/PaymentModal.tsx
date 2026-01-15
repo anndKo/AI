@@ -42,35 +42,65 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
   const [step, setStep] = useState<"packages" | "confirm">("packages");
   const [loading, setLoading] = useState(false);
   const [showQrFullscreen, setShowQrFullscreen] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
+      setError(null);
       fetchPackages();
       fetchPaymentInfo();
+    } else {
+      // Reset state when closing
+      setStep("packages");
+      setSelectedPackage(null);
     }
   }, [open]);
 
   const fetchPackages = async () => {
-    const { data, error } = await supabase
-      .from("payment_packages")
-      .select("*")
-      .eq("is_active", true)
-      .order("price", { ascending: true });
+    try {
+      setDataLoading(true);
+      setError(null);
+      const { data, error: err } = await supabase
+        .from("payment_packages")
+        .select("*")
+        .eq("is_active", true)
+        .order("price", { ascending: true });
 
-    if (!error && data) {
-      setPackages(data);
+      if (err) {
+        setError("Không thể tải gói thanh toán");
+        return;
+      }
+      
+      if (data) {
+        setPackages(data);
+      }
+    } catch (err) {
+      console.error("Error fetching packages:", err);
+      setError("Có lỗi khi tải dữ liệu");
+    } finally {
+      setDataLoading(false);
     }
   };
 
   const fetchPaymentInfo = async () => {
-    const { data, error } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "payment_info")
-      .single();
+    try {
+      const { data, error: err } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "payment_info")
+        .single();
 
-    if (!error && data) {
-      setPaymentInfo(data.value as unknown as PaymentInfo);
+      if (err) {
+        console.warn("No payment info found");
+        return;
+      }
+
+      if (data) {
+        setPaymentInfo(data.value as unknown as PaymentInfo);
+      }
+    } catch (err) {
+      console.error("Error fetching payment info:", err);
     }
   };
 
@@ -141,11 +171,33 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
 
         {step === "packages" && (
           <div className="space-y-3 mt-4">
-            {packages.length === 0 ? (
+            {error && (
+              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm text-destructive">{error}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 w-full"
+                  onClick={() => {
+                    fetchPackages();
+                    fetchPaymentInfo();
+                  }}
+                >
+                  Thử lại
+                </Button>
+              </div>
+            )}
+            {dataLoading && (
+              <p className="text-center text-muted-foreground py-8">
+                Đang tải dữ liệu...
+              </p>
+            )}
+            {!dataLoading && packages.length === 0 && !error && (
               <p className="text-center text-muted-foreground py-8">
                 Chưa có gói thanh toán nào. Vui lòng liên hệ admin.
               </p>
-            ) : (
+            )}
+            {packages.length > 0 && (
               packages.map((pkg) => (
                 <div
                   key={pkg.id}
