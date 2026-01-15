@@ -47,7 +47,6 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [billImage, setBillImage] = useState<File | null>(null);
   const [billPreview, setBillPreview] = useState<string | null>(null);
-  const [uploadingBill, setUploadingBill] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -141,88 +140,42 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
   };
 
   const uploadBillImage = async (): Promise<string | null> => {
-    if (!billImage || !user) return null;
+    if (!billImage || !billPreview) return billPreview;
 
-    try {
-      setUploadingBill(true);
-      const fileExt = billImage.name.split(".").pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const filePath = `bills/${fileName}`;
-
-      // Try to upload to payment_bills bucket, fallback to bills bucket
-      let uploadError: any = null;
-      let uploadedPath = "";
-
-      // Try primary bucket first
-      const { error: err1 } = await supabase.storage
-        .from("payment_bills")
-        .upload(filePath, billImage, { upsert: false });
-
-      if (err1) {
-        // If payment_bills doesn't exist, try bills bucket
-        const { error: err2 } = await supabase.storage
-          .from("bills")
-          .upload(filePath, billImage, { upsert: false });
-
-        if (err2) {
-          uploadError = err2;
-        } else {
-          uploadedPath = "bills";
-        }
-      } else {
-        uploadedPath = "payment_bills";
-      }
-
-      if (uploadError && !uploadedPath) {
-        throw uploadError;
-      }
-
-      const bucketName = uploadedPath || "payment_bills";
-      const { data } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
-    } catch (error) {
-      console.error("Error uploading bill:", error);
-      toast.error("Lỗi upload ảnh bill. Vui lòng thử lại.");
-      return null;
-    } finally {
-      setUploadingBill(false);
-    }
+    // Sử dụng data URL trực tiếp để tránh vấn đề storage bucket
+    // Bill image sẽ được lưu dưới dạng base64 trong database
+    return billPreview;
   };
 
   const handleConfirmPayment = async () => {
     if (!user || !selectedPackage) return;
 
     // Validate bill image is selected
-    if (!billImage) {
+    if (!billImage || !billPreview) {
       toast.error("Vui lòng chọn ảnh bill/chứng chỉ chuyển khoản");
       return;
     }
 
     setLoading(true);
     try {
-      // Upload bill image first
-      const billUrl = await uploadBillImage();
-      if (!billUrl) {
-        toast.error("Lỗi upload ảnh bill");
-        return;
-      }
-
-      // Create payment request with bill image
+      // Create payment request with bill image (as base64 data URL)
       const { error } = await supabase.from("payment_requests").insert({
         user_id: user.id,
         package_id: selectedPackage.id,
         amount: selectedPackage.price,
         questions_count: selectedPackage.questions_count,
-        bill_image: billUrl,
+        bill_image: billPreview, // Store as base64 data URL
         status: "pending",
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error creating payment request:", error);
+        throw error;
+      }
 
       toast.success("Đã gửi yêu cầu thanh toán! Vui lòng đợi admin duyệt.");
+      
+      // Reset state
       onClose();
       setStep("packages");
       setSelectedPackage(null);
@@ -230,7 +183,8 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
       setBillPreview(null);
     } catch (error) {
       console.error("Error creating payment request:", error);
-      toast.error("Có lỗi xảy ra, vui lòng thử lại.");
+      const errorMessage = (error as any)?.message || "Có lỗi xảy ra, vui lòng thử lại.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -344,6 +298,33 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
               </p>
             </div>
 
+            {/* Payment Info - Show before bill upload */}
+            {paymentInfo && (paymentInfo.bank_name || paymentInfo.qr_image) && (
+              <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/30">
+                <h4 className="font-semibold mb-3 text-blue-900 dark:text-blue-100">📋 Thông tin chuyển khoản:</h4>
+                {paymentInfo.bank_name && (
+                  <p className="text-sm text-blue-800 dark:text-blue-200">Ngân hàng: <span className="font-semibold">{paymentInfo.bank_name}</span></p>
+                )}
+                {paymentInfo.account_number && (
+                  <p className="text-sm text-blue-800 dark:text-blue-200">Số TK: <span className="font-semibold">{paymentInfo.account_number}</span></p>
+                )}
+                {paymentInfo.account_name && (
+                  <p className="text-sm text-blue-800 dark:text-blue-200">Chủ TK: <span className="font-semibold">{paymentInfo.account_name}</span></p>
+                )}
+                {paymentInfo.qr_image && (
+                  <div className="mt-3">
+                    <img
+                      src={paymentInfo.qr_image}
+                      alt="QR Code"
+                      className="w-40 h-40 mx-auto border rounded cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => setShowQrFullscreen(true)}
+                      title="Bấm để xem toàn màn hình"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-3">
               <Label htmlFor="bill-image" className="text-base font-semibold">
                 Tải ảnh bill/Chứng chỉ chuyển khoản
@@ -398,7 +379,7 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
                 variant="outline"
                 className="flex-1"
                 onClick={handleCancel}
-                disabled={loading || uploadingBill}
+                disabled={loading}
               >
                 <X className="w-4 h-4 mr-1" />
                 Huỷ
@@ -408,7 +389,7 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
                 onClick={() => {
                   setStep("confirm");
                 }}
-                disabled={!billPreview || loading || uploadingBill}
+                disabled={!billPreview || loading}
               >
                 Tiếp tục
               </Button>
@@ -419,17 +400,18 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
         {step === "confirm" && selectedPackage && (
           <div className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-lg">
-              <h3 className="font-semibold mb-2">Gói đã chọn: {selectedPackage.name}</h3>
-              <p className="text-sm">Số câu hỏi: {selectedPackage.questions_count}</p>
+              <h3 className="font-semibold mb-2">✅ Xác nhận thông tin</h3>
+              <p className="text-sm">Gói: <span className="font-semibold">{selectedPackage.name}</span></p>
+              <p className="text-sm">Số câu hỏi: <span className="font-semibold">{selectedPackage.questions_count}</span></p>
               <p className="text-sm font-bold text-primary">
                 Số tiền: {formatPrice(selectedPackage.price)}
               </p>
             </div>
 
-            {/* Bill Preview */}
+            {/* Bill Preview Summary */}
             {billPreview && (
               <div className="border rounded-lg p-3 bg-muted">
-                <p className="text-sm font-semibold mb-2">Ảnh bill đã tải:</p>
+                <p className="text-sm font-semibold mb-2">📸 Ảnh bill đã tải:</p>
                 <img
                   src={billPreview}
                   alt="Bill"
@@ -438,36 +420,18 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
               </div>
             )}
 
-            {paymentInfo && (paymentInfo.bank_name || paymentInfo.qr_image) && (
-              <div className="p-4 border rounded-lg">
-                <h4 className="font-semibold mb-2">Thông tin chuyển khoản:</h4>
-                {paymentInfo.bank_name && (
-                  <p className="text-sm">Ngân hàng: {paymentInfo.bank_name}</p>
-                )}
-                {paymentInfo.account_number && (
-                  <p className="text-sm">Số TK: {paymentInfo.account_number}</p>
-                )}
-                {paymentInfo.account_name && (
-                  <p className="text-sm">Chủ TK: {paymentInfo.account_name}</p>
-                )}
-                {paymentInfo.qr_image && (
-                  <img
-                    src={paymentInfo.qr_image}
-                    alt="QR Code"
-                    className="w-48 h-48 mx-auto mt-3 border rounded cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => setShowQrFullscreen(true)}
-                    title="Bấm để xem toàn màn hình"
-                  />
-                )}
-              </div>
-            )}
+            <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+              <p className="text-sm text-green-800 dark:text-green-200">
+                ✓ Tất cả thông tin đã sẵn sàng. Bấm "Gửi yêu cầu" để hoàn tất.
+              </p>
+            </div>
 
             <div className="flex gap-3">
               <Button
                 variant="outline"
                 className="flex-1"
                 onClick={() => setStep("bill")}
-                disabled={loading || uploadingBill}
+                disabled={loading}
               >
                 <X className="w-4 h-4 mr-1" />
                 Quay lại
@@ -475,12 +439,12 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
               <Button
                 className="flex-1"
                 onClick={handleConfirmPayment}
-                disabled={loading || uploadingBill}
+                disabled={loading}
               >
-                {uploadingBill || loading ? (
+                {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                    {uploadingBill ? "Đang tải lên..." : "Đang gửi..."}
+                    Đang gửi...
                   </>
                 ) : (
                   <>
