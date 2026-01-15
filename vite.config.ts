@@ -5,6 +5,7 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  base: '/AI/', // <--- QUAN TRỌNG: Bắt buộc phải có dòng này (trùng tên repo GitHub)
   server: {
     host: "::",
     port: 8080,

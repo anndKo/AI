@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,14 +37,10 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
-  Check,
-  X,
   Settings,
   Users,
   CreditCard,
   Package,
-  Upload,
-  Loader2,
 } from "lucide-react";
 
 interface PaymentPackage {
@@ -78,6 +74,7 @@ interface UserQuota {
   id: string;
   user_id: string;
   daily_limit: number;
+  questions_used_today?: number;
   bonus_questions: number;
   profiles?: { email: string };
 }
@@ -177,6 +174,8 @@ export default function Admin() {
       await supabase
         .from("app_settings")
         .update({ value: paymentInfo })
+        .eq("key", "payment_info");
+
       // Update all users with the new daily limit
       const { data: allUsers } = await supabase
         .from("user_quotas")
@@ -192,9 +191,7 @@ export default function Admin() {
       }
 
       toast.success("Đã lưu cài đặt và cập nhật tất cả người dùng!");
-      fetchUsers(
-
-      toast.success("Đã lưu cài đặt!");
+      fetchUsers();
     } catch (error) {
       toast.error("Lỗi lưu cài đặt");
     }
@@ -230,7 +227,29 @@ export default function Admin() {
         duration_days: "",
       });
       fetchPackages();
-    } caopenBillReview = (request: PaymentRequest) => {
+    } catch (error) {
+      toast.error("Lỗi thêm gói");
+    }
+  };
+
+  // Hàm deletePackage bị thiếu trong code cũ
+  const deletePackage = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("payment_packages")
+        .delete()
+        .eq("id", id);
+      
+      if (error) throw error;
+      
+      toast.success("Đã xóa gói!");
+      fetchPackages();
+    } catch (error) {
+      toast.error("Lỗi xóa gói");
+    }
+  };
+
+  const openBillReview = (request: PaymentRequest) => {
     setSelectedRequest(request);
     setShowBillReview(true);
   };
@@ -239,8 +258,7 @@ export default function Admin() {
     fetchRequests();
     fetchUsers();
     setShowBillReview(false);
-    setSelectedRequest(null); toast.error("Lỗi duyệt yêu cầu");
-    }
+    setSelectedRequest(null);
   };
 
   const rejectRequest = async (id: string) => {
@@ -259,39 +277,21 @@ export default function Admin() {
 
   const updateUserQuota = async (userId: string, field: string, value: number) => {
     try {
-      await supabase
-        .from("user_quotas")
-        .update({ [field]: value })
-        .eq("user_id", userId);
-
-      toast.success("Đã cập nhật!");
-      fetchUsers();
-    } catch (error) {
-      toast.error("Lỗi cập nhật");
-    }
-  };// If updating daily_limit, update for ALL users
-      if (field === "daily_limit") {
-        const { data: allUsers } = await supabase
-          .from("user_quotas")
-          .select("id, user_id");
-
-        if (allUsers) {
-          for (const user of allUsers) {
-            await supabase
-              .from("user_quotas")
-              .update({ daily_limit: value })
-              .eq("user_id", user.user_id);
-          }
-        }
-        toast.success("Đã cập nhật giới hạn hàng ngày cho tất cả người dùng!");
-      } else {
         await supabase
           .from("user_quotas")
           .update({ [field]: value })
           .eq("user_id", userId);
+        
         toast.success("Đã cập nhật!");
-      }
-    }).format(price);
+        fetchUsers();
+    } catch (error) {
+      toast.error("Lỗi cập nhật");
+    }
+  };
+
+  // Hàm formatPrice bị thiếu trong code cũ
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
   };
 
   if (authLoading || quotaLoading) {
