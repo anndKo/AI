@@ -158,6 +158,8 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const filePath = `bills/${fileName}`;
 
+      console.log("Uploading to bucket:", filePath);
+      
       // Create FormData for file upload
       const { data, error } = await supabase.storage
         .from("bills")
@@ -168,7 +170,14 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
 
       if (error) {
         console.error("Storage upload error:", error);
-        throw new Error(`Upload failed: ${error.message}`);
+        // Provide more specific error message
+        if (error.message.includes("bucket-not-found") || error.message.includes("not found")) {
+          throw new Error("Lỗi: Bucket 'bills' chưa được tạo. Vui lòng liên hệ admin.");
+        } else if (error.message.includes("Bucket rate limit exceeded")) {
+          throw new Error("Quá nhiều tải lên. Vui lòng thử lại sau vài giây.");
+        } else {
+          throw new Error(`Lỗi upload: ${error.message}`);
+        }
       }
 
       // Get public URL
@@ -176,6 +185,7 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
         .from("bills")
         .getPublicUrl(filePath);
 
+      console.log("Upload successful, URL:", publicData.publicUrl);
       return publicData.publicUrl;
     } catch (error) {
       console.error("Error uploading bill image:", error);
@@ -202,22 +212,38 @@ export function PaymentModal({ open, onClose }: PaymentModalProps) {
       console.log("Bill URL:", billUrl);
 
       // Create payment request with bill image URL
-      console.log("Creating payment request...");
-      const { error } = await supabase.from("payment_requests").insert({
+      console.log("Creating payment request with data:", {
+        user_id: user.id,
+        package_id: selectedPackage.id,
+        amount: selectedPackage.price,
+        questions_count: selectedPackage.questions_count,
+        bill_image: billUrl,
+        status: "pending",
+      });
+
+      const { error, data } = await supabase.from("payment_requests").insert({
         user_id: user.id,
         package_id: selectedPackage.id,
         amount: selectedPackage.price,
         questions_count: selectedPackage.questions_count,
         bill_image: billUrl, // Store URL instead of base64
         status: "pending",
-      });
+      }).select();
 
       if (error) {
         console.error("Payment request error:", error);
-        throw error;
+        
+        // Provide specific error messages
+        if (error.message.includes("RLS") || error.message.includes("policy")) {
+          throw new Error("Lỗi quyền: Không thể tạo yêu cầu. Vui lòng liên hệ admin.");
+        } else if (error.message.includes("column") || error.message.includes("bill_image")) {
+          throw new Error("Lỗi cơ sở dữ liệu: Cột bill_image chưa được thêm. Vui lòng liên hệ admin.");
+        } else {
+          throw new Error(`Lỗi tạo yêu cầu: ${error.message}`);
+        }
       }
 
-      console.log("Payment request created successfully");
+      console.log("Payment request created successfully:", data);
       toast.success("Đã gửi yêu cầu thanh toán! Vui lòng đợi admin duyệt.");
       
       // Reset state
