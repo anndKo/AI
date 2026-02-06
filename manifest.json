@@ -1,0 +1,20 @@
+{
+  "short_name": "Annd AI",
+  "name": "AI Chat - Trợ lý ảo",
+  "icons": [
+    {
+      "src": "/AI/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/AI/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/AI/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff"
+}
