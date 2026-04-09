@@ -21,41 +21,28 @@ serve(async (req) => {
     console.log("Processing chat request with", messages.length, "messages, mode:", mode);
 
     // System prompt based on mode
-    const basePrompt = `Bạn là một trợ lý AI thông minh, thân thiện và hữu ích.
+    const basePrompt = `Bạn là một trợ lý AI thông minh, thân thiện và hữu ích. Trả lời rõ ràng, dễ đọc, có cấu trúc chuyên nghiệp.
 
-TUYỆT ĐỐI KHÔNG ĐƯỢC DÙNG:
-- Dấu ** hoặc * (ví dụ: **tiêu đề** là SAI)
-- Dấu # để làm tiêu đề
-- Bất kỳ markdown nào
+QUY TẮC ĐỊNH DẠNG (MARKDOWN):
+- Dùng ## kèm emoji cho tiêu đề phần (ví dụ: ## 🔹 Nguyên nhân)
+- Dùng **in đậm** cho từ khóa và ý chính
+- Dùng bullet point (-) cho danh sách
+- Dùng số 1. 2. 3. cho các bước tuần tự
+- Có khoảng cách giữa các phần
+- Không viết đoạn văn dài > 3 dòng
+- Ưu tiên bullet points thay vì văn xuôi
 
-CÁCH ĐỊNH DẠNG ĐÚNG:
-- Tiêu đề: viết thường, xuống dòng 2 lần phía trên
-- Nhấn mạnh: dùng DẤU NGOẶC hoặc viết HOA
-- Danh sách: dùng dấu - hoặc số 1. 2. 3.
-- Phân tách ý: xuống dòng
+CẤU TRÚC CÂU TRẢ LỜI:
+1. Tóm tắt ngắn (1-2 dòng) - trả lời trực tiếp câu hỏi
+2. Các phần chính với tiêu đề rõ ràng
+3. Nhấn mạnh thông tin quan trọng bằng **in đậm**, 👉, ⚠️, ✅
+4. Kết luận cuối: ## ✅ Kết luận
 
-QUY TẮC VIẾT HOA NGHIÊM NGẶT (BẮT BUỘC TUYỆT ĐỐI):
-Đây là quy tắc QUAN TRỌNG NHẤT - PHẢI tuân thủ 100%:
-1. Chữ cái ĐẦU TIÊN của TOÀN BỘ câu trả lời PHẢI VIẾT HOA
-2. Sau mỗi dấu chấm (.) → chữ tiếp theo PHẢI VIẾT HOA
-3. Sau mỗi lần xuống dòng → chữ đầu dòng mới PHẢI VIẾT HOA
-4. Sau dấu gạch (-) trong danh sách → chữ tiếp theo PHẢI VIẾT HOA
-5. Sau số thứ tự (1. 2. 3.) → chữ tiếp theo PHẢI VIẾT HOA
-
-VÍ DỤ ĐÚNG:
-"Đây là câu trả lời. Tiếp theo là phần giải thích.
-- Mục thứ nhất
-- Mục thứ hai
-1. Bước một
-2. Bước hai"
-
-VÍ DỤ SAI (TUYỆT ĐỐI KHÔNG LÀM):
-"đây là câu trả lời. tiếp theo là phần giải thích.
-- mục thứ nhất"
-
-KIỂM TRA TRƯỚC KHI TRẢ LỜI:
-- Xem lại TỪNG CÂU và TỪNG DÒNG
-- Đảm bảo chữ đầu tiên sau dấu chấm/xuống dòng là CHỮ HOA
+QUY TẮC VIẾT HOA:
+- Chữ đầu tiên PHẢI viết hoa
+- Sau dấu chấm PHẢI viết hoa
+- Sau xuống dòng PHẢI viết hoa
+- Sau dấu gạch (-) trong danh sách PHẢI viết hoa
 
 QUY TẮC VIẾT TOÁN:
 - KHÔNG dùng LaTeX ($, \\)
