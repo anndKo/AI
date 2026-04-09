@@ -32,27 +32,25 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
       <div
         className={cn(
           "flex gap-3 animate-fade-in",
-          isUser ? "flex-row-reverse" : "flex-row"
+          isUser ? "flex-row-reverse" : "flex-row max-sm:flex-col"
         )}
       >
-        <div
-          className={cn(
-            "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-            isUser
-              ? "bg-chat-user text-chat-user-foreground"
-              : "bg-secondary text-secondary-foreground"
-          )}
-        >
-          {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-        </div>
+        {isUser ? (
+          <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-chat-user text-chat-user-foreground">
+            <User className="w-4 h-4" />
+          </div>
+        ) : (
+          <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-secondary text-secondary-foreground">
+            <Bot className="w-4 h-4" />
+          </div>
+        )}
 
-        <div className="flex flex-col max-w-[80%]">
+        <div className={cn("flex flex-col", isUser ? "max-w-[80%]" : "max-w-[80%] max-sm:max-w-full")}>
           <div
             className={cn(
-              "rounded-2xl px-4 py-3",
               isUser
-                ? "bg-chat-user text-chat-user-foreground rounded-tr-md"
-                : "bg-chat-assistant text-chat-assistant-foreground rounded-tl-md shadow-sm border border-chat-border"
+                ? "rounded-2xl px-4 py-3 bg-chat-user text-chat-user-foreground rounded-tr-md"
+                : "px-1 py-1 text-chat-assistant-foreground"
             )}
           >
             {message.images && message.images.length > 0 && (
@@ -73,7 +71,9 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
                 {message.content}
               </div>
             ) : (
-              <MessageContent content={message.content} />
+              <div className="ai-response-clean">
+                <MessageContent content={message.content} />
+              </div>
             )}
           </div>
 

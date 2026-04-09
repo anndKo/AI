@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CreditCard, AlertCircle } from "lucide-react";
+import { CreditCard, Sparkles } from "lucide-react";
 import { PaymentModal } from "@/components/payment/PaymentModal";
 
 export function QuotaExhausted() {
@@ -8,17 +8,19 @@ export function QuotaExhausted() {
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center p-6 bg-destructive/10 border border-destructive/20 rounded-lg mx-4 my-2">
-        <AlertCircle className="w-12 h-12 text-destructive mb-3" />
-        <h3 className="font-semibold text-lg text-destructive mb-2">
-          Bạn đã hết lượt dùng
+      <div className="flex flex-col items-center justify-center p-6 bg-muted/50 border border-border/60 rounded-xl mx-4 my-2 backdrop-blur-sm">
+        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+          <Sparkles className="w-6 h-6 text-primary" />
+        </div>
+        <h3 className="font-semibold text-base text-foreground mb-1">
+          Bạn đã hết lượt sử dụng
         </h3>
         <p className="text-sm text-muted-foreground text-center mb-4">
-          Mua thêm lượt hỏi để tiếp tục sử dụng
+          Nâng cấp gói để tiếp tục trải nghiệm AI
         </p>
-        <Button onClick={() => setShowPayment(true)} className="gap-2">
+        <Button onClick={() => setShowPayment(true)} className="gap-2 rounded-xl">
           <CreditCard className="w-4 h-4" />
-          Thanh toán ngay
+          Mua thêm lượt
         </Button>
       </div>
 
